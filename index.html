@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catatan Uang</title>
+<style>
+:root{--bg:#fbf8f0;--card:#fff;--ink:#2b2a26;--mute:#7a766b;--line:#e3dccb;--gold:#f5b800;--gold-ink:#2b2a26;--in:#1b7a3d;--out:#b3261e;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1b18;--card:#262420;--ink:#f1ede2;--mute:#a39e8f;--line:#3b382f;--gold:#f5b800;--gold-ink:#1c1b18;--in:#5fd38a;--out:#ff8a80;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,"Times New Roman",serif;padding:16px;max-width:900px;margin:0 auto}
+h1{font-size:1.5rem;margin:8px 0 12px}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.sum div{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px}
+.sum small{display:block;color:var(--mute);font-size:.8rem}
+.sum b{font-size:1.05rem;word-break:break-word}
+#sIn{color:var(--in)}#sOut{color:var(--out)}
+form{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:10px;margin-bottom:16px}
+label{display:grid;gap:4px;font-size:.9rem;color:var(--mute)}
+input,select,button{font:inherit;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:100%}
+.jenis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.jenis label{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:6px;padding:10px;color:var(--ink);cursor:pointer}
+.jenis input{width:auto}
+button{cursor:pointer;font-weight:bold}
+button.utama{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.bar>*{flex:1 1 140px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:.92rem}
+th{background:var(--gold);color:var(--gold-ink);text-align:left;padding:8px}
+td{padding:8px;border-top:1px solid var(--line);white-space:nowrap}
+td.n,th.n{text-align:right}
+td.k{white-space:normal;min-width:130px}
+td.in{color:var(--in)}td.out{color:var(--out)}
+tfoot td{font-weight:bold;background:var(--bg)}
+.x{width:auto;padding:4px 8px;color:var(--out)}
+.kosong{padding:20px;text-align:center;color:var(--mute)}
+footer{color:var(--mute);font-size:.8rem;margin:16px 0}
+</style>
+</head>
+<body>
+<h1>Catatan Uang</h1>
+
+<div class="sum" aria-live="polite">
+  <div><small>Pemasukan</small><b id="sIn">Rp 0</b></div>
+  <div><small>Pengeluaran</small><b id="sOut">Rp 0</b></div>
+  <div><small>Saldo</small><b id="sSaldo">Rp 0</b></div>
+</div>
+
+<form id="f">
+  <div class="jenis" role="radiogroup" aria-label="Jenis catatan">
+    <label><input type="radio" name="jenis" value="masuk" checked> Uang masuk</label>
+    <label><input type="radio" name="jenis" value="keluar"> Uang keluar</label>
+  </div>
+  <label>Tanggal<input type="date" id="tgl" required></label>
+  <label>Keterangan<input type="text" id="ket" placeholder="Contoh: Gaji bulan ini" required maxlength="80"></label>
+  <label>Jumlah (Rp)<input type="text" id="jml" inputmode="numeric" placeholder="50.000" required></label>
+  <button class="utama" type="submit">Simpan catatan</button>
+</form>
+
+<div class="bar">
+  <label>Tampilkan bulan<select id="bln"></select></label>
+  <button id="csv" type="button">Unduh CSV</button>
+  <button id="cad" type="button">Simpan cadangan</button>
+  <button id="pul" type="button">Pulihkan cadangan</button>
+  <input type="file" id="file" accept=".json" hidden>
+</div>
+
+<div class="tw">
+<table>
+  <thead><tr><th class="n">No</th><th>Tanggal</th><th>Keterangan</th><th class="n">Pemasukan</th><th class="n">Pengeluaran</th><th class="n">Saldo</th><th></th></tr></thead>
+  <tbody id="tb"></tbody>
+  <tfoot><tr><td colspan="3">Total</td><td class="n" id="tIn"></td><td class="n" id="tOut"></td><td class="n" id="tSaldo"></td><td></td></tr></tfoot>
+</table>
+<div class="kosong" id="kosong" hidden>Belum ada catatan. Isi formulir di atas lalu tekan Simpan catatan.</div>
+</div>
+
+<footer>Data tersimpan di browser HP ini saja. Simpan cadangan secara berkala agar data aman jika browser dibersihkan.</footer>
+
+<script>
+(function(){
+  var KEY="catatan-uang-v1", data=[];
+  var $=function(i){return document.getElementById(i)};
+  function muat(){try{data=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){data=[]}}
+  function simpan(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){alert("Data gagal disimpan di browser ini.")}}
+  function rp(n){return "Rp "+Math.abs(n).toLocaleString("id-ID")}
+  function tglId(s){var p=s.split("-");return p[2]+"/"+p[1]+"/"+p[0]}
+  function hariIni(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+  var NAMA=["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+
+  function isiBulan(pilih){
+    var set={};data.forEach(function(d){set[d.tgl.slice(0,7)]=1});
+    set[hariIni().slice(0,7)]=1;
+    var ks=Object.keys(set).sort().reverse();
+    var h='<option value="semua">Semua bulan</option>';
+    ks.forEach(function(k){var p=k.split("-");h+='<option value="'+k+'">'+NAMA[+p[1]-1]+" "+p[0]+"</option>"});
+    $("bln").innerHTML=h;
+    $("bln").value=pilih&&(pilih==="semua"||set[pilih])?pilih:"semua";
+  }
+
+  function urut(){return data.slice().sort(function(a,b){return a.tgl<b.tgl?-1:a.tgl>b.tgl?1:a.id-b.id})}
+
+  function gambar(){
+    var bln=$("bln").value, saldo=0, tIn=0, tOut=0, h="", no=0;
+    urut().forEach(function(d){
+      if(d.jenis==="masuk"){saldo+=d.jml}else{saldo-=d.jml}
+      if(bln!=="semua"&&d.tgl.slice(0,7)!==bln)return;
+      no++;
+      if(d.jenis==="masuk")tIn+=d.jml;else tOut+=d.jml;
+      h+="<tr><td class='n'>"+no+"</td><td>"+tglId(d.tgl)+"</td><td class='k'></td>"+
+        "<td class='n in'>"+(d.jenis==="masuk"?rp(d.jml):"")+"</td>"+
+        "<td class='n out'>"+(d.jenis==="keluar"?rp(d.jml):"")+"</td>"+
+        "<td class='n'>"+(saldo<0?"-":"")+rp(saldo)+"</td>"+
+        "<td><button class='x' data-id='"+d.id+"' aria-label='Hapus catatan'>Hapus</button></td></tr>";
+    });
+    $("tb").innerHTML=h;
+    // keterangan diisi lewat textContent agar aman dari karakter HTML
+    var rows=$("tb").querySelectorAll("tr"), idx=0;
+    urut().forEach(function(d){
+      if(bln!=="semua"&&d.tgl.slice(0,7)!==bln)return;
+      rows[idx++].querySelector("td.k").textContent=d.ket;
+    });
+    $("kosong").hidden=no>0;
+    var sIn=0,sOut=0;
+    data.forEach(function(d){if(d.jenis==="masuk")sIn+=d.jml;else sOut+=d.jml});
+    var sal=sIn-sOut;
+    $("sIn").textContent=rp(sIn);$("sOut").textContent=rp(sOut);
+    $("sSaldo").textContent=(sal<0?"-":"")+rp(sal);
+    $("tIn").textContent=rp(tIn);$("tOut").textContent=rp(tOut);
+    $("tSaldo").textContent=(sal<0?"-":"")+rp(sal);
+  }
+
+  $("jml").addEventListener("input",function(){
+    var v=this.value.replace(/\D/g,"");
+    this.value=v?Number(v).toLocaleString("id-ID"):"";
+  });
+
+  $("f").addEventListener("submit",function(e){
+    e.preventDefault();
+    var jml=Number($("jml").value.replace(/\D/g,""));
+    if(!jml){alert("Jumlah harus lebih dari 0.");return}
+    data.push({id:Date.now(),tgl:$("tgl").value,ket:$("ket").value.trim(),
+      jenis:document.querySelector("input[name=jenis]:checked").value,jml:jml});
+    simpan();
+    var b=$("tgl").value.slice(0,7);
+    $("ket").value="";$("jml").value="";
+    isiBulan(b);gambar();$("ket").focus();
+  });
+
+  $("tb").addEventListener("click",function(e){
+    var id=e.target.getAttribute&&e.target.getAttribute("data-id");
+    if(!id)return;
+    if(!confirm("Hapus catatan ini?"))return;
+    data=data.filter(function(d){return String(d.id)!==id});
+    simpan();isiBulan($("bln").value);gambar();
+  });
+
+  $("bln").addEventListener("change",gambar);
+
+  function unduh(nama,isi,tipe){
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([isi],{type:tipe}));
+    a.download=nama;document.body.appendChild(a);a.click();a.remove();
+  }
+
+  $("csv").addEventListener("click",function(){
+    var bln=$("bln").value,saldo=0,no=0,out=["No,Tanggal,Keterangan,Pemasukan,Pengeluaran,Saldo"];
+    urut().forEach(function(d){
+      saldo+=d.jenis==="masuk"?d.jml:-d.jml;
+      if(bln!=="semua"&&d.tgl.slice(0,7)!==bln)return;
+      no++;
+      out.push([no,tglId(d.tgl),'"'+d.ket.replace(/"/g,'""')+'"',
+        d.jenis==="masuk"?d.jml:"",d.jenis==="keluar"?d.jml:"",saldo].join(","));
+    });
+    unduh("catatan-uang.csv",out.join("\n"),"text/csv");
+  });
+
+  $("cad").addEventListener("click",function(){
+    unduh("cadangan-catatan-uang.json",JSON.stringify(data),"application/json");
+  });
+  $("pul").addEventListener("click",function(){$("file").click()});
+  $("file").addEventListener("change",function(){
+    var f=this.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var x=JSON.parse(r.result);
+        if(!Array.isArray(x))throw 0;
+        x=x.filter(function(d){return d&&typeof d.tgl==="string"&&typeof d.ket==="string"&&(d.jenis==="masuk"||d.jenis==="keluar")&&typeof d.jml==="number"&&isFinite(d.jml)});
+        if(!confirm("Ganti semua catatan sekarang dengan "+x.length+" catatan dari cadangan?"))return;
+        data=x.map(function(d,i){return {id:d.id||Date.now()+i,tgl:d.tgl,ket:d.ket,jenis:d.jenis,jml:d.jml}});
+        simpan();isiBulan("semua");gambar();
+      }catch(e){alert("File cadangan tidak valid.")}
+    };
+    r.readAsText(f);this.value="";
+  });
+
+  $("tgl").value=hariIni();
+  muat();isiBulan(hariIni().slice(0,7));gambar();
+
+  if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){})}
+})();
+</script>
+</body>
+</html>
